@@ -82,7 +82,11 @@ class CurveModalExtrude(bpy.types.Operator):
             if ob.type == 'CURVE' and not ob.hide:
                 for spline in ob.data.splines:
                     if not spline.use_cyclic_u:
-                        coord = ob.matrix_world * spline.bezier_points[-1].co
+                        if spline.type == 'BEZIER':
+                            coord = ob.matrix_world * spline.bezier_points[-1].co
+                        elif spline.type == 'NURBS':
+                            coord = ob.matrix_world * spline.points[-1].co
+                            
                         screen_coord = view3d_utils.location_3d_to_region_2d(region, rv3d, coord)
                         if screen_coord: #it could be off screen
                             self.spline_end_dict[tuple(screen_coord)] = spline, ob
@@ -124,17 +128,28 @@ class CurveModalExtrude(bpy.types.Operator):
             #perpendicular to the view dir, at the last bez point of the curve
             
             view_direction = rv3d.view_rotation * Vector((0,0,-1))
-            plane_pt = self.curve_object.matrix_world * self.active_spline.bezier_points[-1].co
+            if self.active_spline.type == 'BEZIER':
+                plane_pt = self.curve_object.matrix_world * self.active_spline.bezier_points[-1].co
+            elif self.active_spline.type == 'NURBS':
+                plane_pt = self.curve_object.matrix_world * self.active_spline.points[-1].co
+                
             new_coord = intersect_line_plane(ray_origin, ray_target,plane_pt, view_direction)
            
             if new_coord:
-               
-                self.active_spline.bezier_points.add(1)
-                self.active_spline.bezier_points[-1].co = self.curve_object.matrix_world.inverted() * new_coord
-                self.active_spline.bezier_points[-1].handle_right.xyz = self.active_spline.bezier_points[-1].co
-                self.active_spline.bezier_points[-1].handle_left.xyz = self.active_spline.bezier_points[-1].co
-                self.active_spline.bezier_points[-1].handle_left_type = 'AUTO'
-                self.active_spline.bezier_points[-1].handle_right_type = 'AUTO'
+                if self.active_spline.type == 'BEZIER':
+                    self.active_spline.bezier_points.add(1)
+                    self.active_spline.bezier_points[-1].co = self.curve_object.matrix_world.inverted() * new_coord
+                    self.active_spline.bezier_points[-1].handle_right.xyz = self.active_spline.bezier_points[-1].co
+                    self.active_spline.bezier_points[-1].handle_left.xyz = self.active_spline.bezier_points[-1].co
+                    self.active_spline.bezier_points[-1].handle_left_type = 'AUTO'
+                    self.active_spline.bezier_points[-1].handle_right_type = 'AUTO'
+                    
+                elif self.active_spline.type == 'NURBS':
+                    self.active_spline.points.add(1)
+                    loc = self.curve_object.matrix_world.inverted() * new_coord
+                    #NURBS pahts have 4 dim points
+                    self.active_spline.points[-1].co = Vector((loc[0], loc[1], loc[2], 1))
+                    
                
                 #udpate everything
                 #udpate modifiers and objects etc.
